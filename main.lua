@@ -22,16 +22,20 @@ end
 local function bmp(file)
 	local image = love.image.newImageData(file.filepath)
 
-	-- Convert black pixels to transparent
-	for x=0, image:getWidth()-1 do
-		for y=0, image:getHeight()-1 do
-			local r, g, b = image:getPixel(x, y)
-			if r==0 and g==0 and b==0 then
-				image:setPixel(x, y, r, g, b, 0)
-			end
-		end
+	-- If first pixel is not black, we don't want transparency
+	local r, g, b = image:getPixel(0, 0)
+	if r+g+b > 0 then
+		return image:encode("png", string.format("%s/%s.png", file.path, file.name))
 	end
 
+	-- Convert black pixels to transparent
+	image:mapPixel(function(_, _, r, g, b, a)
+		if r+g+b == 0 then
+			return r, g, b, 0
+		end
+
+		return r, g, b, a
+	end)
 	image:encode("png", string.format("%s/%s.png", file.path, file.name))
 end
 
@@ -43,9 +47,10 @@ end
 
 -- Fix texture paths
 local function ase(file)
-	local model = {}
+	local model = {{}}
 
-	for line in love.filesystem.lines(file.filepath) do
+	local f = love.filesystem.read(file.filepath)
+	for line in f:gmatch("[^\r\n]+") do
 		local new_line = line
 
 		if line:find("*BITMAP ") then
@@ -53,10 +58,20 @@ local function ase(file)
 			new_line = string.format('%s*BITMAP "textures/%s.png"', white, name)
 		end
 
-		model[#model+1] = new_line
+		-- Chunks to stop huge tables from killing GC
+		if #model[#model] == 200000 then
+			model[#model+1] = {}
+		end
+
+		-- Don't worry about this
+		model[#model][#model[#model]+1] = new_line
 	end
 
-	love.filesystem.write(file.filepath, table.concat(model, "\n"))
+	-- Write to file one chunk at a time
+	love.filesystem.write(file.filepath, "")
+	for _, chunk in ipairs(model) do
+		love.filesystem.append(file.filepath, table.concat(chunk, "\n"))
+	end
 end
 
 function love.load()
