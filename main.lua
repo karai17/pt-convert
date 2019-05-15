@@ -22,12 +22,6 @@ end
 local function bmp(file)
 	local image = love.image.newImageData(file.filepath)
 
-	-- If first pixel is not black, we don't want transparency
-	local r, g, b = image:getPixel(0, 0)
-	if r+g+b > 0 then
-		return image:encode("png", string.format("%s/%s.png", file.path, file.name))
-	end
-
 	-- Convert black pixels to transparent
 	image:mapPixel(function(_, _, r, g, b, a)
 		if r+g+b == 0 then
@@ -36,10 +30,11 @@ local function bmp(file)
 
 		return r, g, b, a
 	end)
+
 	image:encode("png", string.format("%s/%s.png", file.path, file.name))
 end
 
--- Convert TGA to PNG
+-- Convert BMP, TGA to PNG
 local function tga(file)
 	local image = love.image.newImageData(file.filepath)
 	image:encode("png", string.format("%s/%s.png", file.path, file.name))
@@ -79,9 +74,22 @@ function love.load()
 
 	for _, file in ipairs(files) do
 		love.filesystem.createDirectory(file.path)
-		if file.ext == "bmp" then bmp(file) end
-		if file.ext == "tga" then tga(file) end
-		if file.ext == "ase" then ase(file) end
+
+		if file.ext == "bmp" then
+			if file.path:sub(1, 8) == "data/ui/" then
+				bmp(file)
+			else
+				tga(file)
+			end
+		end
+
+		if file.ext == "tga" then
+			tga(file)
+		end
+
+		if file.ext == "ase" then
+			ase(file)
+		end
 	end
 
 	love.event.quit()
